@@ -87,6 +87,7 @@ func (qc *QueueClient) StartOperation(ctx context.Context) {
 	wg.Wait()
 }
 
+// Register the queue
 func (qc *QueueClient) registerQueues(ctx context.Context) error {
 	for _, q := range qc.Queues {
 		err := q.RegisterQueue(ctx)
