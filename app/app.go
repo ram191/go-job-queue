@@ -43,6 +43,11 @@ func (a *App) StartApplication() {
 		DB:   0,
 	})
 
+	ping := redisClient.Ping(ctx)
+	if ping.Err() != nil {
+		panic(ping.Err())
+	}
+
 	qclient, err := jobqueue.NewQueueClient(ctx, redisClient)
 	if err != nil {
 		panic(err)
