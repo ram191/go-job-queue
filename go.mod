@@ -1,4 +1,4 @@
-module gitlab.com/gigaming/igaming/serverless/go-match-queue
+module github.com/ram191/go-job-queue
 
 go 1.19
 
