@@ -1,4 +1,4 @@
-package jobqueue
+package gojobqueue
 
 import (
 	"context"
