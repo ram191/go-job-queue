@@ -13,7 +13,7 @@ import (
 type Queue struct {
 	Name        string
 	Channel     chan Job
-	Run         func(context.Context, interface{}) error
+	Run         func(context.Context, interface{}) (interface{}, error)
 	Data        interface{}
 	Concurrency int
 	Timeout     time.Duration
@@ -29,11 +29,11 @@ type QueueOpts struct {
 }
 
 // Create a new queue
-func NewQueue(name string, processor func(ctx context.Context, data interface{}) error, opts QueueOpts) Queue {
+func NewQueue(name string, processor func(ctx context.Context, data interface{}) (interface{}, error), opts QueueOpts) Queue {
 	fmt.Printf("Queue %v has been created!\n", name)
 	return Queue{
 		Name:        name,
-		Channel:     make(chan Job, 100),
+		Channel:     make(chan Job, 100000),
 		Run:         processor,
 		Concurrency: opts.Concurrency,
 		Timeout:     opts.Timeout,
@@ -42,11 +42,20 @@ func NewQueue(name string, processor func(ctx context.Context, data interface{})
 }
 
 // Push a job to a queue
-func (q Queue) PushJob(job Job) {
+func (q Queue) PushJob(ctx context.Context, job Job) error {
 	fmt.Printf("Added job with id %v to %v queue\n", job.Id, q.Name)
 
 	// Add job to Redis
+	err := q.AddJobToRedis(ctx, job)
+	if err != nil {
+		fmt.Printf("Failed job with id %v to %v queue\n: %v", job.Id, q.Name, err.Error())
+		return err
+	}
+
+	// Add to jobs channel
 	q.Channel <- job
+
+	return nil
 }
 
 // Consume jobs from the queue
@@ -54,14 +63,15 @@ func (q Queue) Start(ctx context.Context) {
 	var wg sync.WaitGroup
 	fmt.Printf("Start processing %v queue....\n", q.Name)
 
+	// Fetch jobs from Redis
+	if err := q.FetchJobsFromRedis(ctx); err != nil {
+		fmt.Printf("Error fetching jobs from Redis: %v\n", err.Error())
+	}
+
 	// Create repeat job go routine
 	go func() {
 		wg.Add(1)
 		ticker := time.NewTicker(q.Ticker)
-		job := Job{
-			Id:   fmt.Sprintf("repeat:%v", time.Now().Unix()),
-			Data: q.Data,
-		}
 
 		// Go routine listens to context channel on cancellation
 		go func() {
@@ -76,7 +86,12 @@ func (q Queue) Start(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				time.AfterFunc(q.Ticker, func() { q.PushJob(job) })
+				now := time.Now().Unix()
+				job := Job{
+					Id:   fmt.Sprintf("repeat:%v", now),
+					Data: q.Data,
+				}
+				time.AfterFunc(q.Ticker, func() { q.PushJob(ctx, job) })
 			}
 		}
 	}()
@@ -94,17 +109,21 @@ func (q Queue) Start(ctx context.Context) {
 				case j := <-q.Channel:
 					jctx, cancel := context.WithTimeout(context.Background(), q.Timeout)
 					j.Error = make(chan error, 1)
-					j.Error <- q.Run(jctx, j.Data)
+					out, err := q.Run(jctx, j.Data)
+					j.Error <- err
+					j.Output = out
 
 					select {
 					case err := <-j.Error:
 						if err != nil {
 							fmt.Printf("Job %v failed: %v\n", j.Id, err.Error())
-							cancel()
 						} else {
 							fmt.Printf("Job %v success\n", j.Id)
-							cancel()
 						}
+						if err := q.CompleteJobRedis(ctx, j, err); err != nil {
+							fmt.Printf("Failed updating complete job to Redis: %v\n", err.Error())
+						}
+						cancel()
 					case <-jctx.Done():
 						fmt.Printf("Job %v timed out\n", j.Id)
 						cancel()

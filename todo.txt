@@ -1,0 +1,3 @@
+- Register queue in Redis
+- Queue channel should be fetched from Redis on Queue registration
+- Add job should add to Redis too

@@ -26,17 +26,17 @@ func (a *App) StartApplication() {
 
 	// Create a queue and assign a processor to the queue
 	firstQueue := jobqueue.NewQueue("odd-queue", GetOddNumbersFromRandom, jobqueue.QueueOpts{
-		Concurrency: 1,
+		Concurrency: 5,
 		Timeout:     time.Second,
 		Ticker:      time.Second,
 	})
 
 	// Create a queue and assign a processor to the queue
-	secondQueue := jobqueue.NewQueue("even-queue", GetEvenNumbersFromRandom, jobqueue.QueueOpts{
-		Concurrency: 1,
-		Timeout:     time.Second,
-		Ticker:      time.Second * 5,
-	})
+	// secondQueue := jobqueue.NewQueue("even-queue", GetEvenNumbersFromRandom, jobqueue.QueueOpts{
+	// 	Concurrency: 1,
+	// 	Timeout:     time.Second,
+	// 	Ticker:      time.Second * 5,
+	// })
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
@@ -49,24 +49,24 @@ func (a *App) StartApplication() {
 	}
 
 	qclient.AddQueue(firstQueue)
-	qclient.AddQueue(secondQueue)
+	// qclient.AddQueue(secondQueue)
 	qclient.StartOperation(ctx)
 }
 
-func GetOddNumbersFromRandom(ctx context.Context, data interface{}) error {
+func GetOddNumbersFromRandom(ctx context.Context, data interface{}) (interface{}, error) {
 	randomInt := rand.Intn(100)
 	time.Sleep(time.Duration(rand.Intn(1500)) * time.Millisecond)
 	if randomInt%2 == 0 {
-		return errors.New(fmt.Sprintf("Failed since the result is even. Value: %v", randomInt))
+		return randomInt, errors.New(fmt.Sprintf("Failed since the result is even. Value: %v", randomInt))
 	}
-	return nil
+	return randomInt, nil
 }
 
-func GetEvenNumbersFromRandom(ctx context.Context, data interface{}) error {
+func GetEvenNumbersFromRandom(ctx context.Context, data interface{}) (interface{}, error) {
 	randomInt := rand.Intn(100)
 	time.Sleep(time.Duration(rand.Intn(1500)) * time.Millisecond)
 	if randomInt%2 != 0 {
-		return errors.New(fmt.Sprintf("Failed since the result is odd. Value: %v", randomInt))
+		return randomInt, errors.New(fmt.Sprintf("Failed since the result is odd. Value: %v", randomInt))
 	}
-	return nil
+	return randomInt, nil
 }

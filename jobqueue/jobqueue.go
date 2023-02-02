@@ -26,7 +26,7 @@ type Job struct {
 	Id            string
 	Completed     bool
 	Data          interface{}
-	Output        chan string
+	Output        interface{}
 	ExecutionTime time.Duration
 	Error         chan error
 }
@@ -44,6 +44,7 @@ func NewQueueClient(ctx context.Context, redisClient *redis.Client) (client *Que
 
 // Add a queue to queue client
 func (qc *QueueClient) AddQueue(queue Queue) {
+	queue.RedisClient = qc.RedisClient
 	qc.Queues = append(qc.Queues, queue)
 }
 
@@ -84,4 +85,15 @@ func (qc *QueueClient) StartOperation(ctx context.Context) {
 	}()
 	time.Sleep(time.Second)
 	wg.Wait()
+}
+
+func (qc *QueueClient) registerQueues(ctx context.Context) error {
+	for _, q := range qc.Queues {
+		err := q.RegisterQueue(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
