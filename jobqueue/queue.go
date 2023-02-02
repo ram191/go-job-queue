@@ -2,6 +2,7 @@ package jobqueue
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -126,6 +127,9 @@ func (q Queue) Start(ctx context.Context) {
 						cancel()
 					case <-jctx.Done():
 						fmt.Printf("Job %v timed out\n", j.Id)
+						if err := q.CompleteJobRedis(ctx, j, errors.New("job timed out")); err != nil {
+							fmt.Printf("Failed updating complete job to Redis: %v\n", err.Error())
+						}
 						cancel()
 					}
 				}
