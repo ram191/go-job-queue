@@ -79,6 +79,7 @@ func (qc *QueueClient) StartOperation(ctx context.Context) {
 			case <-sigs:
 				fmt.Print("TERMINATING....\n")
 				cancel()
+				return
 			default:
 			}
 		}
